@@ -1,0 +1,806 @@
+//#define WIFI_SSID "SET YOUR WIFI SSID"
+//#define WIFI_PASS "SET YOUR WIFI PASS"
+
+#include <math.h>
+
+/// need ESP8266Audio library. ( URL : https://github.com/earlephilhower/ESP8266Audio/ )
+#include <AudioOutput.h>
+#include <AudioGeneratorOpus.h>
+#include <AudioOutputI2S.h>
+
+#include <M5UnitLCD.h>
+#include <M5UnitOLED.h>
+#include <M5Unified.h>
+#include <nvs.h>
+
+#include "AudioFileSourceJcbasimul.hpp"
+
+/// set M5Speaker virtual channel (0-7)
+static constexpr uint8_t m5spk_virtual_channel = 0;
+
+/// set web radio station url
+static constexpr const char* station_list[][2] =
+{
+  {"FMはな / 北海道","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmhana"},
+  {"エフエムもえる / 北海道","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=moeru"},
+  {"Airてっし / 北海道","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=airtesshi"},
+  {"ラジオニセコ / 北海道","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=radioniseko"},
+  {"FMいるか / 北海道","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=iruka"},
+  {"FM AZUR / 青森県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmazur"},
+  {"アップルウェーブ / 青森県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=applewave"},
+  {"ＦＭごしょがわら / 青森県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmgoshogawara"},
+  {"FMONE / 岩手県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmone"},
+  {"エフエムいわぬま / 宮城県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmiwanuma"},
+  {"H＠！FM / 宮城県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=hatfm"},
+  {"ラジオ モンスター / 山形県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=radiomonster"},
+  {"エフエムNCV / 山形県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=yonezawancvfm"},
+  {"えふえむい～じゃんおらんだらじお / 山形県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=orandaradio"},
+  {"ハーバーラジオ / 山形県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=harborradio"},
+  {"ウルトラFM / 福島県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=ultrafm"},
+  {"FMポコ / 福島県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmpoco"},
+  {"エフエムきたかた / 福島県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmkitakata"},
+  {"FMだいご / 茨城県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmdaigo"},
+  {"FMかしま / 茨城県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmkashima"},
+  {"ラジオ高崎 / 群馬県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=radiotakasaki"},
+  {"エフエム太郎 / 群馬県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmtaro"},
+  {"FM OZE / 群馬県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmoze"},
+  {"ラヂオななみ / 群馬県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=radionanami"},
+  {"FMチャッピー / 埼玉県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmchappy"},
+  {"発するＦＭ / 埼玉県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=miyoshifm"},
+  {"ラジオ川越 / 埼玉県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=radiokawagoe"},
+  {"市川うららＦＭ(I&#038;U-LaLaFM) / 千葉県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=ulalafm"},
+  {"かずさエフエム / 千葉県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=kazusafm"},
+  {"ラジオ成田 / 千葉県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=radionarita"},
+  {"ふくろうFM / 千葉県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmfukuro"},
+  {"SKYWAVE FM / 千葉県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=skywavefm"},
+  {"FMえどがわ / 東京都","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmedogawa"},
+  {"むさしのFM / 東京都","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=musashinofm"},
+  {"FMしながわ / 東京都","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmshinagawa"},
+  {"かつしかFM / 東京都","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmkatsushika"},
+  {"渋谷のラジオ / 東京都","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=shibuyanoradio"},
+  {"FMブルー湘南 / 神奈川県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmblueshonan"},
+  {"鎌倉FM / 神奈川県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=kamakurafm"},
+  {"FM湘南ナパサ / 神奈川県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmshonan"},
+  {"FMおだわら / 神奈川県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmodawara"},
+  {"湘南マジックウェイブ / 神奈川県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=magicwave"},
+  {"FMやまと / 神奈川県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmyamato"},
+  {"レディオ湘南 / 神奈川県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=radioshonan"},
+  {"FMサルース / 神奈川県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmsalus"},
+  {"エフエム甲府 / 山梨県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmkofu"},
+  {"FMふじやま / 山梨県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmfujiyama"},
+  {"エフエム　ふじごこ / 山梨県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmfujigoko"},
+  {"ＦＭ八ヶ岳 / 山梨県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmyatsugatake"},
+  {"ラジオチャット・ＦＭにいつ / 新潟県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=radiochat"},
+  {"FMうおぬま / 新潟県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmuonuma"},
+  {"エフエムながおか / 新潟県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmnagaoka"},
+  {"エフエムしばた / 新潟県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmshibata"},
+  {"FM KENTO / 新潟県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmkento"},
+  {"ＦＭゆきぐに / 新潟県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmyukiguni"},
+  {"FM-J エフエム上越 / 新潟県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmjyoetsu"},
+  {"ＦＭピッカラ / 新潟県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmpikkara"},
+  {"LCV FM / 長野県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=lovefm"},
+  {"FM軽井沢 / 長野県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmkaruizawa"},
+  {"エフエムあづみの / 長野県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=azuminofm"},
+  {"高ボッチ高原FM / 長野県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=shiojirifm"},
+  {"FMPiPi / 岐阜県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmpipi"},
+  {"FMわっち / 岐阜県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmwatch"},
+  {"Hits FM / 岐阜県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=hitsfm"},
+  {"FM Haro！ / 静岡県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=haro"},
+  {"FM IS / 静岡県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmis"},
+  {"g-sky76.5 / 静岡県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmshimada"},
+  {"富士山GOGOFM / 静岡県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fujiyamagogofm"},
+  {"ボイスキュー / 静岡県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=voicecue"},
+  {"マリンパル / 静岡県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmshimizu"},
+  {"FM-Hi！ / 静岡県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmhi"},
+  {"Radio-f / 静岡県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=radiof"},
+  {"COAST－FM76.7MHｚ / 静岡県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=coastfm"},
+  {"エフエムなぎさステーション / 静岡県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=nagisastation"},
+  {"Ciao！ / 静岡県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=ciao"},
+  {"FMいずのくに / 静岡県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmizunokuni"},
+  {"エフエム　ななみ / 愛知県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmnanami"},
+  {"United North / 愛知県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=unitednorth"},
+  {"RADIO SANQ / 愛知県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=radiosanq"},
+  {"i-wave / 愛知県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmichinomiya"},
+  {"いなべエフエム / 三重県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=inabefm"},
+  {"Suzuka Voice FM 78.3MHz / 三重県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=suzuka"},
+  {"富山シティエフエム株式会社 / 富山県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=toyamacityfm"},
+  {"エフエムとなみ / 富山県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmtonami"},
+  {"ラジオたかおか / 富山県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=radiotakaoka"},
+  {"ラジオこまつ / 石川県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=radiokomatsu"},
+  {"ラジオななお / 石川県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=radionanao"},
+  {"ラジオかなざわ / 石川県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=radiokanazawa"},
+  {"えふえむ草津 / 滋賀県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmkusatsu"},
+  {"FMいかる / 京都府","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmikaru"},
+  {"FMうじ / 京都府","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmuji"},
+  {"FMまいづる / 京都府","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmmaizuru"},
+  {"FM845 / 京都府","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=kyotoribingufm"},
+  {"FM千里 / 大阪府","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmsenri"},
+  {"FMちゃお / 大阪府","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmyao"},
+  {"ウメダFM Be Happy!789 / 大阪府","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=umedafm"},
+  {"FM-HANAKO 82.4MHz / 大阪府","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmhanako"},
+  {"タッキー816みのおエフエム / 大阪府","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=minofm"},
+  {"エフエムいたみ / 兵庫県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmitami"},
+  {"ハミングFM宝塚 / 兵庫県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmtakarazuka"},
+  {"さくらFM / 兵庫県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=sakurafm"},
+  {"エフエムみっきぃ / 兵庫県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmmiki"},
+  {"805たんば / 兵庫県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=tanba"},
+  {"FM GENKI / 兵庫県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmgenki"},
+  {"なら どっと FM / 奈良県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=narafm"},
+  {"エフエムハイホー / 奈良県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmnishiyamato"},
+  {"FM五條 / 奈良県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmgojo"},
+  {"バナナエフエム / 和歌山県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=bananafm"},
+  {"FM TANABE / 和歌山県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmtanabe"},
+  {"FMはしもと / 和歌山県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmhashimoto"},
+  {"FMビーチステーション / 和歌山県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=beachstation"},
+  {"レディオ モモ / 岡山県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=radiomomo"},
+  {"エフエムくらしき / 岡山県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmkurashiki"},
+  {"FMふくやま / 広島県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=bingo"},
+  {"FMおのみち / 広島県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmonomichi"},
+  {"ＦＭちゅーピー / 広島県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmchupea"},
+  {"FMはつかいち / 広島県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmhatsukaichi"},
+  {"FM東広島 / 広島県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmhigashihiroshima"},
+  {"FOR　LIFE　RADIO / 広島県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmmihara"},
+  {"COME ON ! FM / 山口県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=comeonfm"},
+  {"しゅうなんFM / 山口県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=shunanfm"},
+  {"RADIO BIRD / 鳥取県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=radiobird"},
+  {"FMラヂオバリバリ / 愛媛県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmradiobaribari"},
+  {"FMがいや / 愛媛県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmgaiya"},
+  {"Hello! NEW 新居浜 FM / 愛媛県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=niihamafm"},
+  {"DreamsFM / 福岡県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=dreamsfm"},
+  {"FM八女 / 福岡県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmyame"},
+  {"FMからつ / 佐賀県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmkaratsu"},
+  {"Kappa　FM / 熊本県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=fmyatsushiro"},
+  {"FM791 / 熊本県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=kumamotocityfm"},
+  {"ゆふいんラヂオ局 / 大分県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=yufuin"},
+  {"NOASFM / 大分県","https://api.radimo.smen.biz/api/v1/select_stream?channel=0&quality=high&burst=5&station=noasfm"},
+};
+static constexpr const size_t initial_station = 95;   // ウメダFM Be Happy!789 / 大阪府
+static constexpr const size_t stations = sizeof(station_list) / sizeof(station_list[0]);
+
+class AudioOutputM5Speaker : public AudioOutput
+{
+  public:
+    AudioOutputM5Speaker(m5::Speaker_Class* m5sound, uint8_t virtual_sound_channel = 0)
+    {
+      _m5sound = m5sound;
+      _virtual_ch = virtual_sound_channel;
+    }
+    virtual ~AudioOutputM5Speaker(void) {};
+    virtual bool begin(void) override { return true; }
+    virtual bool ConsumeSample(int16_t sample[2]) override
+    {
+      if (_tri_buffer_index < tri_buf_size)
+      {
+        _tri_buffer[_tri_index][_tri_buffer_index  ] = sample[0];
+        _tri_buffer[_tri_index][_tri_buffer_index+1] = sample[1];
+        _tri_buffer_index += 2;
+
+        return true;
+      }
+
+      flush();
+      return false;
+    }
+    virtual void flush(void) override
+    {
+      if (_tri_buffer_index)
+      {
+        _m5sound->playRaw(_tri_buffer[_tri_index], _tri_buffer_index, hertz, true, 1, _virtual_ch);
+        _tri_index = _tri_index < 2 ? _tri_index + 1 : 0;
+        _tri_buffer_index = 0;
+        ++_update_count;
+      }
+    }
+    virtual bool stop(void) override
+    {
+      flush();
+      _m5sound->stop(_virtual_ch);
+      for (size_t i = 0; i < 3; ++i)
+      {
+        memset(_tri_buffer[i], 0, tri_buf_size * sizeof(int16_t));
+      }
+      ++_update_count;
+      return true;
+    }
+
+    const int16_t* getBuffer(void) const { return _tri_buffer[(_tri_index + 2) % 3]; }
+    const uint32_t getUpdateCount(void) const { return _update_count; }
+
+  protected:
+    m5::Speaker_Class* _m5sound;
+    uint8_t _virtual_ch;
+    static constexpr size_t tri_buf_size = 640;
+    int16_t _tri_buffer[3][tri_buf_size];
+    size_t _tri_buffer_index = 0;
+    size_t _tri_index = 0;
+    size_t _update_count = 0;
+};
+
+
+#define FFT_SIZE 256
+class fft_t
+{
+  float _wr[FFT_SIZE + 1];
+  float _wi[FFT_SIZE + 1];
+  float _fr[FFT_SIZE + 1];
+  float _fi[FFT_SIZE + 1];
+  uint16_t _br[FFT_SIZE + 1];
+  size_t _ie;
+
+public:
+  fft_t(void)
+  {
+#ifndef M_PI
+#define M_PI 3.141592653
+#endif
+    _ie = logf( (float)FFT_SIZE ) / log(2.0) + 0.5;
+    static constexpr float omega = 2.0f * M_PI / FFT_SIZE;
+    static constexpr int s4 = FFT_SIZE / 4;
+    static constexpr int s2 = FFT_SIZE / 2;
+    for ( int i = 1 ; i < s4 ; ++i)
+    {
+    float f = cosf(omega * i);
+      _wi[s4 + i] = f;
+      _wi[s4 - i] = f;
+      _wr[     i] = f;
+      _wr[s2 - i] = -f;
+    }
+    _wi[s4] = _wr[0] = 1;
+
+    size_t je = 1;
+    _br[0] = 0;
+    _br[1] = FFT_SIZE / 2;
+    for ( size_t i = 0 ; i < _ie - 1 ; ++i )
+    {
+      _br[ je << 1 ] = _br[ je ] >> 1;
+      je = je << 1;
+      for ( size_t j = 1 ; j < je ; ++j )
+      {
+        _br[je + j] = _br[je] + _br[j];
+      }
+    }
+  }
+
+  void exec(const int16_t* in)
+  {
+    memset(_fi, 0, sizeof(_fi));
+    for ( size_t j = 0 ; j < FFT_SIZE / 2 ; ++j )
+    {
+      float basej = 0.25 * (1.0-_wr[j]);
+      size_t r = FFT_SIZE - j - 1;
+
+      /// perform han window and stereo to mono convert.
+      _fr[_br[j]] = basej * (in[j * 2] + in[j * 2 + 1]);
+      _fr[_br[r]] = basej * (in[r * 2] + in[r * 2 + 1]);
+    }
+
+    size_t s = 1;
+    size_t i = 0;
+    do
+    {
+      size_t ke = s;
+      s <<= 1;
+      size_t je = FFT_SIZE / s;
+      size_t j = 0;
+      do
+      {
+        size_t k = 0;
+        do
+        {
+          size_t l = s * j + k;
+          size_t m = ke * (2 * j + 1) + k;
+          size_t p = je * k;
+          float Wxmr = _fr[m] * _wr[p] + _fi[m] * _wi[p];
+          float Wxmi = _fi[m] * _wr[p] - _fr[m] * _wi[p];
+          _fr[m] = _fr[l] - Wxmr;
+          _fi[m] = _fi[l] - Wxmi;
+          _fr[l] += Wxmr;
+          _fi[l] += Wxmi;
+        } while ( ++k < ke) ;
+      } while ( ++j < je );
+    } while ( ++i < _ie );
+  }
+
+  uint32_t get(size_t index)
+  {
+    return (index < FFT_SIZE / 2) ? (uint32_t)sqrtf(_fr[ index ] * _fr[ index ] + _fi[ index ] * _fi[ index ]) : 0u;
+  }
+};
+
+static constexpr size_t WAVE_SIZE = 320;
+static AudioOutputM5Speaker out(&M5.Speaker, m5spk_virtual_channel);
+static AudioGeneratorOpus *decoder = nullptr;
+static AudioFileSourceJcbasimul *file = nullptr;
+static fft_t fft;
+static bool fft_enabled = false;
+static bool wave_enabled = false;
+static uint16_t prev_y[(FFT_SIZE / 2)+1];
+static uint16_t peak_y[(FFT_SIZE / 2)+1];
+static int16_t wave_y[WAVE_SIZE];
+static int16_t wave_h[WAVE_SIZE];
+static int16_t raw_data[WAVE_SIZE * 2];
+static int header_height = 0;
+static size_t station_index = initial_station;
+static char stream_title[128] = { 0 };
+static const char* meta_text[2] = { nullptr, stream_title };
+static const size_t meta_text_num = sizeof(meta_text) / sizeof(meta_text[0]);
+static uint8_t meta_mod_bits = 0;
+static volatile size_t playindex = ~0u;
+
+static void MDCallback(void *cbData, const char *type, bool isUnicode, const char *string)
+{
+  (void)cbData;
+  if ((strcmp(type, "StreamTitle") == 0) && (strcmp(stream_title, string) != 0))
+  {
+    strncpy(stream_title, string, sizeof(stream_title));
+    meta_mod_bits |= 2;
+  }
+}
+
+static void stop(void)
+{
+  if (decoder) {
+    decoder->stop();
+    delete decoder;
+    decoder = nullptr;
+  }
+
+  if (file) {
+    file->close();
+    delete file;
+    file = nullptr;
+  }
+  out.stop();
+}
+
+static void play(size_t index)
+{
+  playindex = index;
+}
+
+static void decodeTask(void*)
+{
+  for (;;)
+  {
+    delay(1);
+
+    if (playindex != ~0u)
+    {
+      auto index = playindex;
+      playindex = ~0u;
+      stop();
+      meta_text[0] = station_list[index][0];
+      stream_title[0] = 0;
+      meta_mod_bits = 3;
+      file = new AudioFileSourceJcbasimul();
+      file->RegisterMetadataCB(MDCallback, (void*)"JCBA");
+      file->open(station_list[index][1]);
+      decoder = new AudioGeneratorOpus();
+      if(!decoder->begin(file, &out)) {
+        Serial.println("failed: decoder->begin(webSocket, &out)");
+      }
+    }
+    
+    if (decoder->isRunning() && !decoder->loop()) {
+      decoder->stop(); 
+      Serial.println("decoder->stop()");
+    }
+  }
+}
+
+static uint32_t bgcolor(LGFX_Device* gfx, int y)
+{
+  auto h = gfx->height();
+  auto dh = h - header_height;
+  int v = ((h - y)<<5) / dh;
+  if (dh > 44)
+  {
+    int v2 = ((h - y - 1)<<5) / dh;
+    if ((v >> 2) != (v2 >> 2))
+    {
+      return 0x666666u;
+    }
+  }
+  return gfx->color888(v + 2, v, v + 6);
+}
+
+static void gfxSetup(LGFX_Device* gfx)
+{
+  if (gfx == nullptr) { return; }
+  if (gfx->width() < gfx->height())
+  {
+    gfx->setRotation(gfx->getRotation()^1);
+  }
+  gfx->setFont(&fonts::lgfxJapanGothic_12);
+  gfx->setEpdMode(epd_mode_t::epd_fastest);
+  gfx->setTextWrap(false);
+  gfx->setCursor(0, 8);
+  gfx->println("WebRadio player");
+  gfx->fillRect(0, 6, gfx->width(), 2, TFT_BLACK);
+
+  header_height = (gfx->height() > 80) ? 33 : 21;
+  fft_enabled = !gfx->isEPD();
+  if (fft_enabled)
+  {
+    wave_enabled = (gfx->getBoard() != m5gfx::board_M5UnitLCD);
+
+    for (int y = header_height; y < gfx->height(); ++y)
+    {
+      gfx->drawFastHLine(0, y, gfx->width(), bgcolor(gfx, y));
+    }
+  }
+
+  for (int x = 0; x < (FFT_SIZE/2)+1; ++x)
+  {
+    prev_y[x] = INT16_MAX;
+    peak_y[x] = INT16_MAX;
+  }
+  for (int x = 0; x < WAVE_SIZE; ++x)
+  {
+    wave_y[x] = gfx->height();
+    wave_h[x] = 0;
+  }
+}
+
+void gfxLoop(LGFX_Device* gfx)
+{
+  if (gfx == nullptr) { return; }
+  if (header_height > 32)
+  {
+    if (meta_mod_bits)
+    {
+      gfx->startWrite();
+      for (int id = 0; id < meta_text_num; ++id)
+      {
+        if (0 == (meta_mod_bits & (1<<id))) { continue; }
+        meta_mod_bits &= ~(1<<id);
+        size_t y = id * 12;
+        if (y+12 >= header_height) { continue; }
+        gfx->setCursor(4, 8 + y);
+        gfx->fillRect(0, 8 + y, gfx->width(), 12, gfx->getBaseColor());
+        gfx->print(meta_text[id]);
+        gfx->print(" "); // Garbage data removal when UTF8 characters are broken in the middle.
+      }
+      gfx->display();
+      gfx->endWrite();
+    }
+  }
+  else
+  {
+    static int title_x;
+    static int title_id;
+    static int wait = INT16_MAX;
+
+    if (meta_mod_bits)
+    {
+      if (meta_mod_bits & 1)
+      {
+        title_x = 4;
+        title_id = 0;
+        gfx->fillRect(0, 8, gfx->width(), 12, gfx->getBaseColor());
+      }
+      meta_mod_bits = 0;
+      wait = 0;
+    }
+
+    if (--wait < 0)
+    {
+      int tx = title_x;
+      int tid = title_id;
+      wait = 3;
+      gfx->startWrite();
+      uint_fast8_t no_data_bits = 0;
+      do
+      {
+        if (tx == 4) { wait = 255; }
+        gfx->setCursor(tx, 8);
+        const char* meta = meta_text[tid];
+        if (meta[0] != 0)
+        {
+          gfx->print(meta);
+          gfx->print("  /  ");
+          tx = gfx->getCursorX();
+          if (++tid == meta_text_num) { tid = 0; }
+          if (tx <= 4)
+          {
+            title_x = tx;
+            title_id = tid;
+          }
+        }
+        else
+        {
+          if ((no_data_bits |= 1 << tid) == ((1 << meta_text_num) - 1))
+          {
+            break;
+          }
+          if (++tid == meta_text_num) { tid = 0; }
+        }
+      } while (tx < gfx->width());
+      --title_x;
+      gfx->display();
+      gfx->endWrite();
+    }
+  }
+
+  if (fft_enabled)
+  {
+    static int prev_x[2];
+    static int peak_x[2];
+
+    auto buf = out.getBuffer();
+    if (buf)
+    {
+      memcpy(raw_data, buf, WAVE_SIZE * 2 * sizeof(int16_t)); // stereo data copy
+      gfx->startWrite();
+
+      // draw stereo level meter
+      for (size_t i = 0; i < 2; ++i)
+      {
+        int32_t level = 0;
+        for (size_t j = i; j < 640; j += 32)
+        {
+          uint32_t lv = abs(raw_data[j]);
+          if (level < lv) { level = lv; }
+        }
+
+        int32_t x = (level * gfx->width()) / INT16_MAX;
+        int32_t px = prev_x[i];
+        if (px != x)
+        {
+          gfx->fillRect(x, i * 3, px - x, 2, px < x ? 0xFF9900u : 0x330000u);
+          prev_x[i] = x;
+        }
+        px = peak_x[i];
+        if (px > x)
+        {
+          gfx->writeFastVLine(px, i * 3, 2, TFT_BLACK);
+          px--;
+        }
+        else
+        {
+          px = x;
+        }
+        if (peak_x[i] != px)
+        {
+          peak_x[i] = px;
+          gfx->writeFastVLine(px, i * 3, 2, TFT_WHITE);
+        }
+      }
+      gfx->display();
+
+      // draw FFT level meter
+      fft.exec(raw_data);
+      size_t bw = gfx->width() / 60;
+      if (bw < 3) { bw = 3; }
+      int32_t dsp_height = gfx->height();
+      int32_t fft_height = dsp_height - header_height - 1;
+      size_t xe = gfx->width() / bw;
+      if (xe > (FFT_SIZE/2)) { xe = (FFT_SIZE/2); }
+      int32_t wave_next = ((header_height + dsp_height) >> 1) + (((256 - (raw_data[0] + raw_data[1])) * fft_height) >> 17);
+
+      uint32_t bar_color[2] = { 0x000033u, 0x99AAFFu };
+
+      for (size_t bx = 0; bx <= xe; ++bx)
+      {
+        size_t x = bx * bw;
+        if ((x & 7) == 0) { gfx->display(); taskYIELD(); }
+        int32_t f = fft.get(bx);
+        int32_t y = (f * fft_height) >> 18;
+        if (y > fft_height) { y = fft_height; }
+        y = dsp_height - y;
+        int32_t py = prev_y[bx];
+        if (y != py)
+        {
+          gfx->fillRect(x, y, bw - 1, py - y, bar_color[(y < py)]);
+          prev_y[bx] = y;
+        }
+        py = peak_y[bx] + 1;
+        if (py < y)
+        {
+          gfx->writeFastHLine(x, py - 1, bw - 1, bgcolor(gfx, py - 1));
+        }
+        else
+        {
+          py = y - 1;
+        }
+        if (peak_y[bx] != py)
+        {
+          peak_y[bx] = py;
+          gfx->writeFastHLine(x, py, bw - 1, TFT_WHITE);
+        }
+
+
+        if (wave_enabled)
+        {
+          for (size_t bi = 0; bi < bw; ++bi)
+          {
+            size_t i = x + bi;
+            if (i >= gfx->width() || i >= WAVE_SIZE) { break; }
+            y = wave_y[i];
+            int32_t h = wave_h[i];
+            bool use_bg = (bi+1 == bw);
+            if (h>0)
+            { /// erase previous wave.
+              gfx->setAddrWindow(i, y, 1, h);
+              h += y;
+              do
+              {
+                uint32_t bg = (use_bg || y < peak_y[bx]) ? bgcolor(gfx, y)
+                            : (y == peak_y[bx]) ? 0xFFFFFFu
+                            : bar_color[(y >= prev_y[bx])];
+                gfx->writeColor(bg, 1);
+              } while (++y < h);
+            }
+            size_t i2 = i << 1;
+            int32_t y1 = wave_next;
+            wave_next = ((header_height + dsp_height) >> 1) + (((256 - (raw_data[i2] + raw_data[i2 + 1])) * fft_height) >> 17);
+            int32_t y2 = wave_next;
+            if (y1 > y2)
+            {
+              int32_t tmp = y1;
+              y1 = y2;
+              y2 = tmp;
+            }
+            y = y1;
+            h = y2 + 1 - y;
+            wave_y[i] = y;
+            wave_h[i] = h;
+            if (h>0)
+            { /// draw new wave.
+              gfx->setAddrWindow(i, y, 1, h);
+              h += y;
+              do
+              {
+                uint32_t bg = (y < prev_y[bx]) ? 0xFFCC33u : 0xFFFFFFu;
+                gfx->writeColor(bg, 1);
+              } while (++y < h);
+            }
+          }
+        }
+      }
+      gfx->display();
+      gfx->endWrite();
+    }
+  }
+
+  if (!gfx->displayBusy())
+  { // draw volume bar
+    static int px;
+    uint8_t v = M5.Speaker.getChannelVolume(m5spk_virtual_channel);
+    int x = v * (gfx->width()) >> 8;
+    if (px != x)
+    {
+      gfx->fillRect(x, 6, px - x, 2, px < x ? 0xAAFFAAu : 0u);
+      gfx->display();
+      px = x;
+    }
+  }
+}
+
+void setup(void)
+{
+  auto cfg = M5.config();
+
+  cfg.external_spk = true;    /// use external speaker (SPK HAT / ATOMIC SPK)
+//cfg.external_spk_detail.omit_atomic_spk = true; // exclude ATOMIC SPK
+//cfg.external_spk_detail.omit_spk_hat    = true; // exclude SPK HAT
+
+  M5.begin(cfg);
+
+  { /// custom setting
+    auto spk_cfg = M5.Speaker.config();
+    /// Increasing the sample_rate will improve the sound quality instead of increasing the CPU load.
+    spk_cfg.sample_rate = 96000; // default:64000 (64kHz)  e.g. 48000 , 50000 , 80000 , 96000 , 100000 , 128000 , 144000 , 192000 , 200000
+    spk_cfg.task_pinned_core = APP_CPU_NUM;
+    M5.Speaker.config(spk_cfg);
+  }
+
+
+  M5.Speaker.begin();
+
+  M5.Display.println("Connecting to WiFi");
+  WiFi.disconnect();
+  WiFi.softAPdisconnect(true);
+  WiFi.mode(WIFI_STA);
+
+#if defined ( WIFI_SSID ) &&  defined ( WIFI_PASS )
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+#else
+  WiFi.begin();
+#endif
+
+  // Try forever
+  while (WiFi.status() != WL_CONNECTED) {
+    M5.Display.print(".");
+    delay(100);
+  }
+  M5.Display.clear();
+
+  gfxSetup(&M5.Display);
+
+  {
+    uint32_t nvs_handle;
+    if (0 == nvs_open("WebRadio", NVS_READONLY, &nvs_handle)) {
+      size_t volume;
+      nvs_get_u32(nvs_handle, "volume", &volume);
+      nvs_get_u32(nvs_handle, "station", &station_index);
+      nvs_close(nvs_handle);
+      M5.Speaker.setChannelVolume(m5spk_virtual_channel, volume);
+      Serial.printf("station_index:%u volume:%u\n", station_index, volume);
+    }    
+  }
+
+  if (station_index >= stations) { station_index = stations - 1; }
+  play(station_index);
+
+  xTaskCreatePinnedToCore(decodeTask, "decodeTask", 16 * 1024, nullptr, 1, nullptr, PRO_CPU_NUM);
+}
+
+void loop(void)
+{
+  static unsigned long long saveSettings = 0;
+  gfxLoop(&M5.Display);
+
+  {
+    static int prev_frame;
+    int frame;
+    do
+    {
+      delay(1);
+    } while (prev_frame == (frame = millis() >> 3)); /// 8 msec cycle wait
+    prev_frame = frame;
+  }
+
+  M5.update();
+  if (M5.BtnA.wasPressed())
+  {
+    M5.Speaker.tone(440, 50);
+  }
+  if (M5.BtnA.wasDeciedClickCount())
+  {
+    switch (M5.BtnA.getClickCount())
+    {
+    case 1:
+      M5.Speaker.tone(1000, 100);
+      if (++station_index >= stations) { station_index = 0; }
+      play(station_index);
+      saveSettings = millis() + 5000;
+      break;
+
+    case 2:
+      M5.Speaker.tone(800, 100);
+      if (station_index == 0) { station_index = stations; }
+      play(--station_index);
+      saveSettings = millis() + 5000;
+      break;
+    }
+  }
+  if (M5.BtnA.isHolding() || M5.BtnB.isPressed() || M5.BtnC.isPressed())
+  {
+    size_t v = M5.Speaker.getChannelVolume(m5spk_virtual_channel);
+    int add = (M5.BtnB.isPressed()) ? -1 : 1;
+    if (M5.BtnA.isHolding())
+    {
+      add = M5.BtnA.getClickCount() ? -1 : 1;
+    }
+    v += add;
+    if (v <= 255)
+    {
+      M5.Speaker.setChannelVolume(m5spk_virtual_channel, v);
+      saveSettings = millis() + 5000;
+    }
+  }
+
+  if (saveSettings > 0 && millis() - saveSettings > 0)
+  {
+    uint32_t nvs_handle;
+    if (0 == nvs_open("WebRadio", NVS_READWRITE, &nvs_handle)) {
+      size_t volume = M5.Speaker.getChannelVolume(m5spk_virtual_channel);
+      nvs_set_u32(nvs_handle, "volume", volume);
+      nvs_set_u32(nvs_handle, "station", station_index);
+      nvs_close(nvs_handle);
+    }
+    saveSettings = 0;
+  }
+      
+}
