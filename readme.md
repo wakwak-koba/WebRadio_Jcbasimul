@@ -1,12 +1,16 @@
 # WebRadio_Jcbbsimul
 
 ### 機能
-- [WebRadio_with_ESP8266Audio](https://github.com/m5stack/M5Unified/tree/master/examples/Advanced/WebRadio_with_ESP8266Audio) をベースにして、[JCBAインターネットサイマルラジオ](https://www.jcbasimul.com/)が聴けるようにしました。
+- [WebRadio_with_ESP8266Audio](https://github.com/m5stack/M5Unified/tree/master/examples/Advanced/WebRadio_with_ESP8266Audio) をベースにして、[JCBAインターネットサイマルラジオ](https://www.jcbasimul.com/) が聴けるようにしました。
 - 2022年4月時点で公開されている全132局を網羅しています。
-- 試験的に[リリースパッケージ](release/)も用意しました。Arduino 環境のない方でもインストールできるはず。
 - 選局と音量は不揮発性メモリに保存され、次回の起動時に初期採用されます。
+- 試験的に[リリースパッケージ](release/)も用意しました。Arduino 環境のない方でもインストールできます。
 
 ![image1](docs/screenshot.png)
+
+### WiFi設定
+SDカードを用いて WiFi の設定が行えます。
+いったん接続に成功すれば、以降はSDカードは必要ありません。 
 
 ### 操作方法
 |ボタン|動作|
@@ -28,7 +32,6 @@ Arduino のビルド環境が必要とはなりますが、不要な局はコメ
 - [arduino-libraries/Arduino_JSON](https://github.com/arduino-libraries/Arduino_JSON)
 
 ### ペンディング中
-- WiFiの初期設定(接続情報を記録したSDカードを利用する案が濃厚)
 - 番組名も取得可能と思われるが調査中
 - 切断後の自動再接続(実装によってはDDoSになりかねないため躊躇してる)
 
