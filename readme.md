@@ -19,6 +19,13 @@
 全132局を網羅したため、あまりに多すぎて選局が大変です。  
 Arduino のビルド環境が必要とはなりますが、不要な局はコメント行にして必要最小限にすると快適になるかと思います。
 
+### ビルドに必要なライブラリ
+- [m5stack/M5GFX](https://github.com/m5stack/M5GFX)
+- [m5stack/M5Unified](https://github.com/m5stack/M5Unified)
+- [earlephilhower/ESP8266Audio](https://github.com/earlephilhower/ESP8266Audio)
+- [Links2004/arduinoWebSockets](https://github.com/Links2004/arduinoWebSockets)
+- [arduino-libraries/Arduino_JSON](https://github.com/arduino-libraries/Arduino_JSON)
+
 ### ペンディング中
 - 番組名も取得可能と思われるが調査中
 - 切断後の自動再接続(実装によってはDDoSになりかねないため躊躇してる)
