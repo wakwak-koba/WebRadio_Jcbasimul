@@ -28,6 +28,7 @@ Arduino のビルド環境が必要とはなりますが、不要な局はコメ
 - [arduino-libraries/Arduino_JSON](https://github.com/arduino-libraries/Arduino_JSON)
 
 ### ペンディング中
+- WiFiの初期設定(接続情報を記録したSDカードを利用する案が濃厚)
 - 番組名も取得可能と思われるが調査中
 - 切断後の自動再接続(実装によってはDDoSになりかねないため躊躇してる)
 
