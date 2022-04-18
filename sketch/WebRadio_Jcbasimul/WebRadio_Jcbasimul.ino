@@ -8,6 +8,7 @@
 #include <AudioGeneratorOpus.h>
 #include <AudioOutputI2S.h>
 
+#include <SD.h>
 #include <M5UnitLCD.h>
 #include <M5UnitOLED.h>
 #include <M5Unified.h>
@@ -707,6 +708,28 @@ void setup(void)
   WiFi.begin(WIFI_SSID, WIFI_PASS);
 #else
   WiFi.begin();
+
+  /// wifi settings
+  if (SD.begin(GPIO_NUM_4, SPI, 25000000)) {
+    auto fs = SD.open("/wifi.txt", FILE_READ);
+    if(fs) {
+      size_t sz = fs.size();
+      char buf[sz + 1];
+      fs.read((uint8_t*)buf, sz);
+      buf[sz] = 0;
+      fs.close();
+
+      int y = 0;
+      for(int x = 0; x < sz; x++) {
+        if(buf[x] == 0x0a || buf[x] == 0x0d)
+          buf[x] = 0;
+        else if (!y && x > 0 && !buf[x - 1] && buf[x])
+          y = x;
+      }
+      WiFi.begin(buf, &buf[y]);
+    }
+    SD.end();
+  }
 #endif
 
   // Try forever
