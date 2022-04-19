@@ -7,10 +7,9 @@
 
 #include <HTTPClient.h>
 #include <AudioFileSource.h>
-#include <AudioFileSource.h>
 #include <Arduino_JSON.h>
 #include "SimpleRingBuffer.hpp"
-#include "AudioFileSourceWebSockets.hpp"
+#include "WebSocketsClientFn.hpp"
 
 class AudioFileSourceWebSockets : public AudioFileSource {
   public:
