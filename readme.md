@@ -1,4 +1,4 @@
-# WebRadio_Jcbbsimul
+# WebRadio_Jcbasimul
 
 ### 機能
 - [WebRadio_with_ESP8266Audio](https://github.com/m5stack/M5Unified/tree/master/examples/Advanced/WebRadio_with_ESP8266Audio) をベースにして、[JCBAインターネットサイマルラジオ](https://www.jcbasimul.com/) が聴けるようにしました。
@@ -28,6 +28,7 @@ SDカードを用いて WiFi の設定が行えます。
 Arduino のビルド環境が必要とはなりますが、不要な局はコメント行にして必要最小限にすると快適になるかと思います。
 
 ### ビルドに必要なライブラリ
+- [espressif/arduino-esp32](https://github.com/espressif/arduino-esp32) ※ espressif 版の 2.0.2 で動作確認してます
 - [m5stack/M5GFX](https://github.com/m5stack/M5GFX)
 - [m5stack/M5Unified](https://github.com/m5stack/M5Unified)
 - [earlephilhower/ESP8266Audio](https://github.com/earlephilhower/ESP8266Audio)
