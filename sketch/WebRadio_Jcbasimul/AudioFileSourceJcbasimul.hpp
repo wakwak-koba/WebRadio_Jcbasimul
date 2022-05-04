@@ -41,22 +41,23 @@ class AudioFileSourceWebSockets : public AudioFileSource {
 
     virtual uint32_t read(void *data, uint32_t length) override {
       auto start = millis();
-      while(buffer.available() < 1 && millis() - start < timeout) {
-        loop();
-        delay(10);
-      }
+      while(buffer.available() < 1 && millis() - start < timeout)
+        wss.loop();
       return readNonBlock((uint8_t *)data, length);
     }
 
     virtual uint32_t readNonBlock(void *data, uint32_t length) override {
-//    if(buffer.available() < 1)
-//      cb.st(NO_DATA, PSTR("Buffer is empty"));
-      return buffer.read((uint8_t *)data, length);
+      auto rLen = buffer.read((uint8_t *)data, length);
+      if(length && rLen < length)
+        cb.st(STATUS_TOO_SLOW, PSTR("receive is too slow.."));
+      return rLen;
     }
 
     virtual void setTimeout(uint16_t _timeout) {
       timeout = _timeout;
     }
+    
+    enum { STATUS_TOO_SLOW=10 };
     
   protected:   
     virtual bool waitConnect() {
@@ -66,10 +67,7 @@ class AudioFileSourceWebSockets : public AudioFileSource {
 //    cb.st(STATUS_CONNECTING, PSTR("Attempting to connect"));
       auto st = millis();
       while(!wss.isConnected() && millis() - st < timeout)
-      {
-        loop();
-        delay(10);
-      }
+        wss.loop();
 
       return wss.isConnected();
     }
