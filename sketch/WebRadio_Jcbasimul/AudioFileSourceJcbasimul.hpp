@@ -41,16 +41,11 @@ class AudioFileSourceWebSockets : public AudioFileSource {
 
     virtual uint32_t read(void *data, uint32_t length) override {
       auto start = millis();
-      while(buffer.available() < 1 && millis() - start < timeout)
+      while(buffer.available() < 1 && millis() - start < timeout) {
+        delay(1);
         wss.loop();
-      return readNonBlock((uint8_t *)data, length);
-    }
-
-    virtual uint32_t readNonBlock(void *data, uint32_t length) override {
-      auto rLen = buffer.read((uint8_t *)data, length);
-      if(length && rLen < length)
-        cb.st(STATUS_TOO_SLOW, PSTR("receive is too slow.."));
-      return rLen;
+      }
+      return buffer.read((uint8_t *)data, length);
     }
 
     virtual void setTimeout(uint16_t _timeout) {
@@ -155,6 +150,10 @@ class AudioFileSourceJcbasimul : public AudioFileSourceWebSockets {
         return waitConnect();
       else
         return false;
+    }
+
+    String getInfoBuffer() {
+      return "Buffer: " + buffer.getInfo();
     }
     
   protected:

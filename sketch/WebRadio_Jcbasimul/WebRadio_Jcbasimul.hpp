@@ -148,7 +148,12 @@ static byte initial_station = 95;   // ウメダFM Be Happy!789
 
 class Jcbasimul : public WebRadio {
   public:
-    Jcbasimul(AudioOutput * _out, int cpuDecode, const uint16_t buffSize = 8 * 1024) : bufferSize(buffSize), WebRadio(_out, cpuDecode, 16*1024) {
+    Jcbasimul(AudioOutput * _out, int cpuDecode, const uint16_t buffSize = 5 * 1024) : bufferSize(buffSize), WebRadio(_out, cpuDecode, 16*1024) {
+      for(int i = 0; i < sizeof(station_list) / sizeof(station_list[0]); i++)
+        stations.push_back(new station_t(this, station_list[i][0], station_list[i][1]));
+    }
+
+    Jcbasimul(AudioOutput * _out, int cpuDecode, uint8_t * _buffer, const uint16_t buffSize) : buffer(_buffer), bufferSize(buffSize), WebRadio(_out, cpuDecode, 16*1024) {
       for(int i = 0; i < sizeof(station_list) / sizeof(station_list[0]); i++)
         stations.push_back(new station_t(this, station_list[i][0], station_list[i][1]));
     }
@@ -181,7 +186,11 @@ class Jcbasimul : public WebRadio {
 
         AudioFileSourceJcbasimul * getSource() {
           auto jcba = (Jcbasimul *)radio;
-          auto source = new AudioFileSourceJcbasimul();
+          AudioFileSourceJcbasimul * source;
+          if(jcba->buffer)
+            source = new AudioFileSourceJcbasimul(jcba->buffer, jcba->bufferSize);
+          else
+            source = new AudioFileSourceJcbasimul(jcba->bufferSize);
           source->RegisterMetadataCB(jcba->fnCbMetadata, jcba->fnCbMetadata_data);
           source->RegisterStatusCB  (jcba->fnCbStatus  , jcba->fnCbStatus_data  );
           if(!source->open(url)) {
@@ -228,32 +237,19 @@ class Jcbasimul : public WebRadio {
         if(current_station && !source)
           source = current_station->getSource();
 
-        if(source)
-          source->loop();
-
-        if(source && !decoder)
+        if(source && !decoder) {
           decoder = current_station->getDecoder();
-
-        if(decoder && !decoder->isRunning()) {
-          if(!decoder->begin(source, out)) {
+          if(!decoder->begin(source, out))
             Serial.println("failed: decoder->begin(webSocket, &out)");
-          } else
-            timeout = millis();
         }
         
         if (decoder && decoder->isRunning()) {
-          if (source->getSize() > 2*1024) {
             if (decoder->loop())
               timeout = millis();
             else {
               Serial.println("failed: decoder->loop()");
               stop();
             }
-          } else if (millis() - timeout > 5000) {
-            Serial.println("receive was interrupted");
-            stop();
-          }
-            
         }
 
         if (saveSettings > 0 && millis() > saveSettings) {
@@ -295,6 +291,12 @@ class Jcbasimul : public WebRadio {
       return play(getStation((getIndex(current_station) + sn + (next ? 1 : -1)) % sn));
     }
 
+    String getInfoBuffer() {
+      if(source)
+        return source->getInfoBuffer();
+      return "";
+    }
+    
   public:
     std::function<void(const char * text)> onChunk = nullptr;
   
@@ -324,10 +326,9 @@ class Jcbasimul : public WebRadio {
 
     AudioFileSourceJcbasimul * source = nullptr;
     AudioGeneratorOpus * decoder = nullptr;
+    uint8_t * buffer = nullptr;
     uint16_t bufferSize;
 
-    
 };
-
 
 #endif
