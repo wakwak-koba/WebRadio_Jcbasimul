@@ -35,9 +35,12 @@ Arduino のビルド環境が必要とはなりますが、不要な局はコメ
 - [Links2004/arduinoWebSockets](https://github.com/Links2004/arduinoWebSockets)
 - [arduino-libraries/Arduino_JSON](https://github.com/arduino-libraries/Arduino_JSON)
 
+### ビルド時の注意
+　PSRAM:Enabled にしてビルドすると、低速な PSRAM をバッファとして利用されうるコードが生成されてしまいます。  
+　PSRAM:Disabled でビルドされることを強く推奨します。
+ 
 ### ペンディング中
 - 番組名も取得可能と思われるが調査中
-- 切断後の自動再接続(実装によってはDDoSになりかねないため躊躇してる)
 
 ### 謝辞
 かっこいいビジュアルは [lovyan03](https://github.com/lovyan03/) さんの制作です。  
